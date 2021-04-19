@@ -1,0 +1,9 @@
+{
+  "name": "anayltics-bot",
+  "description": "",
+  "version": "0.1.0",
+  "devDependencies": {
+    "serverless-prune-plugin": "^1.5.0",
+    "serverless-python-requirements": "^5.1.1"
+  }
+}

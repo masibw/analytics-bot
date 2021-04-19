@@ -1,24 +1,101 @@
-import json
+import json, os
+from apiclient.discovery import build
+from oauth2client.service_account import ServiceAccountCredentials
+import slackweb
+import boto3
 
+def get_service(api_name, api_version, scopes, key_file_location):
+    """Get a service that communicates to a Google API.
 
-def hello(event, context):
-    body = {
-        "message": "Go Serverless v1.0! Your function executed successfully!",
-        "input": event
-    }
+    Args:
+        api_name: The name of the api to connect to.
+        api_version: The api version to connect to.
+        scopes: A list auth scopes to authorize for the application.
+        key_file_location: The path to a valid service account JSON key file.
 
-    response = {
-        "statusCode": 200,
-        "body": json.dumps(body)
-    }
-
-    return response
-
-    # Use this code if you don't use the http event with the LAMBDA-PROXY
-    # integration
+    Returns:
+        A service that is connected to the specified API.
     """
+
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(
+            key_file_location, scopes=scopes)
+
+    # Build the service object.
+    service = build(api_name, api_version, credentials=credentials)
+
+    return service
+
+def get_first_profile_id(service):
+    # Use the Analytics service object to get the first profile id.
+
+    # Get a list of all Google Analytics accounts for this user
+    accounts = service.management().accounts().list().execute()
+
+    if accounts.get('items'):
+        # Get the first Google Analytics account.
+        account = accounts.get('items')[0].get('id')
+
+        # Get a list of all the properties for the first account.
+        properties = service.management().webproperties().list(
+                accountId=account).execute()
+
+        if properties.get('items'):
+            # Get the first property id.
+            property = properties.get('items')[0].get('id')
+
+            # Get a list of all views (profiles) for the first property.
+            profiles = service.management().profiles().list(
+                    accountId=account,
+                    webPropertyId=property).execute()
+
+            if profiles.get('items'):
+                # return the first view (profile) id.
+                return profiles.get('items')[0].get('id')
+
+    return None
+
+def get_results(service, profile_id):
+    # Use the Analytics Service Object to query the Core Reporting API
+    # for the number of sessions within the past seven days.
+    return service.data().ga().get(
+            ids='ga:' + profile_id,
+            start_date='yesterday',
+            end_date='today',
+            metrics='ga:sessions').execute()
+
+def print_results(results):
+    # Print data nicely for the user.
+    slack = slackweb.Slack(url=os.environ['SLACK_WEBHOOK_URL'])
+    if results:
+        slack.notify(text="昨日の閲覧数: "+results.get('rows')[0][0])
+
+    else:
+        slack.notify(text="No results found")
+
+def daily_notify(event, context):
+    scope = 'https://www.googleapis.com/auth/analytics.readonly'
+    service = get_service(
+        api_name='analytics',
+        api_version='v3',
+        scopes=[scope],
+        key_file_location=os.environ['ANALYTICS_KEY_LOCATION'])
+    profile_id = get_first_profile_id(service)
+    print_results(get_results(service, profile_id))
+
+# slackは3秒以内にレスポンスを返す必要があるので先にレスポンスを返し，非同期に通知を送信する
+def notify_front(event, context):
+    try:
+        import unzip_requirements
+    except ImportError:
+        pass
+    client = boto3.client('lambda')
+    client.invoke(
+        FunctionName='anayltics-bot-prd-daily_notify',
+        InvocationType='Event',
+        LogType='Tail',
+        Payload=json.dumps(event)
+    )
     return {
-        "message": "Go Serverless v1.0! Your function executed successfully!",
-        "event": event
+        'statusCode': 200,
+        'body': "しばらくお待ちください"
     }
-    """

@@ -23,7 +23,19 @@ frameworkVersion: '2'
 provider:
   name: aws
   runtime: python3.8
+  memorySize: 128
+  region: ap-northeast-1
   lambdaHashingVersion: 20201221
+  environment: ${file(./env.yml)}
+  logRetentionInDays: 14
+  iam:
+    role:
+      statements:
+          - Effect: 'Allow'
+            Action:
+              - 'lambda:InvokeFunction'
+            Resource:
+              - '*'
 
 # you can overwrite defaults here
 #  stage: dev
@@ -50,16 +62,23 @@ provider:
 #    variable1: value1
 
 # you can add packaging information here
-#package:
-#  patterns:
-#    - '!exclude-me.py'
-#    - '!exclude-me-dir/**'
-#    - include-me.py
-#    - include-me-dir/**
+package:
+  patterns:
+    - '!node_modules/**'
+    - '!analytics-bot/**'
 
 functions:
-  hello:
-    handler: handler.hello
+  daily_notify:
+    handler: handler.daily_notify
+    events:
+      - schedule: cron(01 00 * * ? *)
+  notify_front:
+    handler: handler.notify_front
+    timeout: 3
+    events:
+      - http:
+          path: views/daily
+          method: post
 #    The following are a few example events you can configure
 #    NOTE: Please make sure to change your handler code to work with those events
 #    Check the event documentation for details
@@ -111,3 +130,16 @@ functions:
 #     NewOutput:
 #       Description: "Description for the output"
 #       Value: "Some output value"
+
+custom:
+  defaultStage: prd
+  prune:
+    automatic: true
+    number:
+  pythonRequirements:
+    slim: true
+
+
+plugins:
+  - serverless-python-requirements
+  - serverless-prune-plugin
