@@ -71,7 +71,7 @@ functions:
   daily_notify:
     handler: handler.daily_notify
     events:
-      - schedule: cron(01 00 * * ? *)
+      - schedule: cron(01 15 * * ? *)
   notify_front:
     handler: handler.notify_front
     timeout: 3
